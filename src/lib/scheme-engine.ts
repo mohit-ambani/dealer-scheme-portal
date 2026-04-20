@@ -185,23 +185,30 @@ export async function calculateSchemeForDealer(
        result.target_met, result.incentive_earned, result.progress_percentage]
     );
 
-    // Save invoice mappings
+    // Save invoice mappings in batch
     await query(
       'DELETE FROM scheme_invoice_mapping WHERE dealer_id=$1 AND scheme_id=$2 AND rule_id=$3',
       [dealerId, schemeId, rule.id]
     );
-    for (const inv of result.matching_invoices) {
-      // Find the invoice item id
-      const item = invoiceItems.find(
-        ii => ii.invoice_number === inv.invoice_number && ii.sku_name === inv.sku_name
+    const mappingItems = result.matching_invoices
+      .map(inv => invoiceItems.find(ii => ii.invoice_number === inv.invoice_number && ii.sku_name === inv.sku_name))
+      .filter((item): item is InvoiceItem => item !== undefined);
+    if (mappingItems.length > 0) {
+      const values: unknown[] = [];
+      const placeholders: string[] = [];
+      mappingItems.forEach((item, idx) => {
+        const inv = result.matching_invoices.find(
+          i => i.invoice_number === item.invoice_number && i.sku_name === item.sku_name
+        )!;
+        const offset = idx * 7;
+        placeholders.push(`($${offset+1},$${offset+2},$${offset+3},$${offset+4},$${offset+5},$${offset+6},$${offset+7})`);
+        values.push(dealerId, schemeId, rule.id, item.invoice_id, item.id, inv.value, inv.quantity);
+      });
+      await query(
+        `INSERT INTO scheme_invoice_mapping (dealer_id, scheme_id, rule_id, invoice_id, invoice_item_id, contributing_value, contributing_quantity)
+         VALUES ${placeholders.join(',')}`,
+        values
       );
-      if (item) {
-        await query(
-          `INSERT INTO scheme_invoice_mapping (dealer_id, scheme_id, rule_id, invoice_id, invoice_item_id, contributing_value, contributing_quantity)
-           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-          [dealerId, schemeId, rule.id, item.invoice_id, item.id, inv.value, inv.quantity]
-        );
-      }
     }
   }
 
@@ -378,10 +385,10 @@ async function calculateRule(
         break;
       }
       case 'slab': {
-        const slabs: Slab[] = await getAll(
-          'SELECT * FROM scheme_slabs WHERE rule_id = $1 ORDER BY slab_from',
-          [rule.id]
-        );
+        // Reuse slabs already fetched for UI above
+        const slabs: Slab[] = allSlabsForUi
+          ? allSlabsForUi.map(s => ({ slab_from: s.from, slab_to: s.to, incentive_calc_type: s.type, incentive_value: s.rate }))
+          : await getAll('SELECT * FROM scheme_slabs WHERE rule_id = $1 ORDER BY slab_from', [rule.id]);
         // Helper: compute incentive for a given slab configuration
         const applySlab = (slab: Slab, isTop = false) => {
           const from = Number(slab.slab_from);

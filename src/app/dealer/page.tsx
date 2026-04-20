@@ -14,11 +14,6 @@ interface DealerData {
   summary: { total_schemes: number; schemes_fully_achieved: number; total_incentive_earned: number; total_invoices: number; total_purchase_value: number };
 }
 
-interface LeaderboardEntry {
-  dealer_id: number; dealer_name: string; firm_name: string; region: string;
-  total_incentive: number; schemes_achieved: number; total_schemes: number;
-}
-
 interface NextTargetInfo {
   scheme_name: string;
   rule_name: string;
@@ -108,11 +103,9 @@ function DealerDashboardInner() {
   const dealerId = searchParams.get("id") || "1";
   const [data, setData] = useState<DealerData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
 
   useEffect(() => {
     fetch(`/api/dealers/${dealerId}/schemes`).then(r => r.json()).then(d => { setData(d); setLoading(false); }).catch(() => { setLoading(false); });
-    fetch(`/api/dealers/leaderboard`).then(r => r.json()).then(d => { if (Array.isArray(d)) setLeaderboard(d); }).catch(() => {});
   }, [dealerId]);
 
   if (loading) return (
@@ -313,50 +306,6 @@ function DealerDashboardInner() {
           </div>
         );
       })()}
-
-      {/* Scheme Leaderboard */}
-      {leaderboard.length > 0 && (
-        <div className="px-4 mt-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-bold text-gray-900">Scheme Leaderboard</h2>
-            <span className="text-[10px] text-gray-400 uppercase">Top Dealers</span>
-          </div>
-          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-            {leaderboard.slice(0, 5).map((entry, i) => {
-              const isCurrentDealer = entry.dealer_id === Number(dealerId);
-              const rankIcon = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : null;
-              return (
-                <div key={entry.dealer_id}
-                  className={`flex items-center gap-3 px-4 py-3 leaderboard-entry ${i < 4 ? "border-b border-gray-50" : ""} ${isCurrentDealer ? "bg-orange-50/60" : ""}`}
-                  style={{ animationDelay: `${i * 0.1}s` }}>
-                  <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
-                    {rankIcon ? (
-                      <span className="text-lg">{rankIcon}</span>
-                    ) : (
-                      <span className="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center text-xs font-bold text-gray-500">
-                        {i + 1}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className={`text-sm font-semibold truncate ${isCurrentDealer ? "text-orange-700" : "text-gray-900"}`}>
-                      {entry.dealer_name}
-                      {isCurrentDealer && <span className="text-[10px] text-orange-500 ml-1">(You)</span>}
-                    </div>
-                    <div className="text-[10px] text-gray-400 truncate">{entry.firm_name} &bull; {entry.region}</div>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className={`text-sm font-bold ${isCurrentDealer ? "text-orange-600" : "text-gray-900"}`}>
-                      ₹{entry.total_incentive.toLocaleString("en-IN")}
-                    </div>
-                    <div className="text-[10px] text-gray-400">{entry.schemes_achieved}/{entry.total_schemes} done</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* Achievement Badges */}
       <div className="px-4 mt-6 mb-6">
